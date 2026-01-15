@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Widevine EME Test - Security Audit</title>
+  <style>
+    :root { --bg:#0b1020; --card:#121935; --text:#e7ecff; --muted:#9fb0ff; --ok:#2dd4bf; --warn:#f97316; --err:#ef4444; --danger: #ff003c; }
+    html,body { height:100%; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background:var(--bg); color:var(--text); }
+    .wrap { max-width:880px; margin:40px auto; padding:24px; background:var(--card); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); border: 1px solid #1b2250; }
+    h1 { margin:0 0 8px; font-size:24px; display: flex; align-items: center; gap: 10px; }
+    p { margin:6px 0 14px; color:var(--muted); }
+    button { appearance:none; border:0; background:#3b82f6; color:white; padding:10px 20px; border-radius:12px; font-weight:600; cursor:pointer; transition: all 0.2s; }
+    button:hover { background: #2563eb; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    .row { display:flex; gap:12px; align-items:center; margin:16px 0; flex-wrap:wrap; }
+    .tag { padding:6px 10px; border-radius:999px; background:#1f2a54; color:var(--muted); font-size:12px; }
+    pre { background:#070b1a; padding:16px; border-radius:14px; overflow:auto; border:1px solid #ff003c44; position: relative; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:13px; color: #5ef1ff; }
+    .note { font-size:12px; color:var(--muted); margin-top:10px; }
+
+    /* Style cho cảnh báo Antidetect */
+    #anti-alert { 
+      display: none; 
+      background: rgba(255, 0, 60, 0.15); 
+      border: 2px solid var(--danger); 
+      color: var(--danger); 
+      padding: 15px; 
+      border-radius: 12px; 
+      margin-bottom: 20px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      animation: blink 1.5s infinite;
+    }
+	#anti-info { 
+      display: none; 
+      background: rgb(112 209 133 / 15%); 
+      border: 2px solid #0fcf15; 
+      color: #00ff45; 
+      padding: 15px; 
+      border-radius: 12px; 
+      margin-bottom: 20px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      animation: blink 1.5s infinite;
+    }
+    @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+    .danger-text { color: var(--danger) !important; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="anti-alert">⚠️ PHÁT HIỆN DẤU HIỆU ANTIDETECT BROWSER - DRM  INTEGRITY FAIL ⚠️</div>
+	<div id="anti-info">EME khá ổn nha</div>
+    
+    <h1>Widevine EME Test</h1>
+    <p>Hệ thống kiểm tra tính toàn vẹn của DRM (Digital Rights Management)</p>
+
+    <div class="row">
+      <button id="runBtn">🚀 Chạy kiểm tra</button>
+      <span class="tag" id="secureTag">context: —</span>
+      <span class="tag" id="uaTag"></span>
+    </div>
+
+    <!--<pre><code id="out">{ }</code></pre> -->
+
+    <p class="note">Ghi chú: Client ID và Challenge length được dùng để xác thực thiết bị thật.</p>
+  </div>
+
+<script>
+(function(){
+  const outEl = document.getElementById('out');
+  const runBtn = document.getElementById('runBtn');
+  const uaTag = document.getElementById('uaTag');
+  const secureTag = document.getElementById('secureTag');
+  const alertEl = document.getElementById('anti-alert');
+  const infoEl = document.getElementById('anti-info');
+
+  const state = {
+    timestamp: null,
+    userAgent: navigator.userAgent,
+    isSecureContext: window.isSecureContext === true,
+    emeAvailable: 'requestMediaKeySystemAccess' in navigator,
+    hasWidevine: null,
+    ok: false,
+    sessionId: null,
+    messageLength: 0,
+    isAntidetect: false,
+    error: null,
+    steps: []
+  };
+
+  function pushStep(msg){ state.steps.push(msg); }
+
+  function render(){
+    uaTag.textContent = state.userAgent.slice(0, 50) + '...';
+    secureTag.textContent = 'context: ' + (state.isSecureContext ? 'secure' : 'insecure');
+    
+    // Hiển thị cảnh báo nguy hiểm nếu phát hiện Antidetect
+    if (state.isAntidetect) {
+      alertEl.style.display = 'block';
+	  infoEl.style.display = 'none';
+      // outEl.style.borderColor = '#ff003c';
+    } else {
+      alertEl.style.display = 'none';
+	  infoEl.style.display = 'block';
+      // outEl.style.borderColor = '#1b2250';
+    }
+
+    //outEl.textContent = JSON.stringify(state, null, 2);
+  }
+
+  async function checkIsChrome() {
+    if (navigator.userAgentData && navigator.userAgentData.brands) {
+      return navigator.userAgentData.brands.some(b => b.brand === 'Google Chrome');
+    }
+    return state.userAgent.includes("Chrome") && !state.userAgent.includes("Edg");
+  }
+
+  async function runTest(){
+    runBtn.disabled = true;
+    // Reset state
+    state.timestamp = new Date().toISOString();
+    state.hasWidevine = null;
+    state.ok = false;
+    state.sessionId = null;
+    state.messageLength = 0;
+    state.isAntidetect = false;
+    state.error = null;
+    state.steps = [];
+    // render();
+
+    if (!state.emeAvailable){
+      state.error = 'EME NOT SUPPORTED';
+      render();
+      runBtn.disabled = false;
+      return;
+    }
+
+    const config = [{
+      initDataTypes: ['cenc'],
+      sessionTypes: ['temporary'],
+      videoCapabilities: [{
+        contentType: 'video/mp4; codecs="avc1.4d0028"',
+        robustness: 'SW_SECURE_CRYPTO'
+      }]
+    }];
+
+    try {
+      pushStep('Accessing com.widevine.alpha...');
+      const access = await navigator.requestMediaKeySystemAccess('com.widevine.alpha', config);
+      state.hasWidevine = true;
+
+      const mediaKeys = await access.createMediaKeys();
+      const session = mediaKeys.createSession('temporary');
+
+      session.addEventListener('message', async (event) => {
+        state.ok = true;
+        const data = new Uint8Array(event.message);
+        state.messageLength = data.byteLength;
+        state.sessionId = event.target.sessionId;
+
+        // KIỂM TRA ANTIDETECT
+        const isChrome = await checkIsChrome();
+        if (state.messageLength !== 2 && isChrome) {
+          state.isAntidetect = true;
+          state.error = "CRITICAL: Browser fingerprint inconsistency detected.";
+        }
+
+        pushStep('CDM Challenge received');
+        render();
+      });
+
+      const b64 = 'AAAARHBzc2gAAAAA7e+LqXnWSs6jyCfc1R0h7QAAACQIARIBMRoNd2lkZXZpbmVfdGVzdCIKMjAxNV90ZWFycyoCU0Q=';
+      const initData = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+      await session.generateRequest('cenc', initData);
+      pushStep('License request generated');
+
+    } catch (err){
+      if (state.hasWidevine === null) state.hasWidevine = false;
+      state.error = String(err);
+      render();
+    } finally {
+      runBtn.disabled = false;
+    }
+  }
+
+  runBtn.addEventListener('click', runTest);
+  // render();
+})();
+</script>
+</body>
+</html>
