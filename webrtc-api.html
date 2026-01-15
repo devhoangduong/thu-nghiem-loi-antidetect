@@ -126,7 +126,7 @@
           const ip = ipMatch[1];
           if (candidate.includes('typ srflx')) {
             // IP thật (public) từ STUN
-            candidates.add(ip + ' (not parse)');
+            candidates.add(ip);
             console.log('Found public IP (STUN - not parse):', ip);
             updateResultDisplay();
           } else if (candidate.includes('typ host')) {
@@ -159,7 +159,7 @@
         const ip = ipMatch[1];
         if (candidate.includes('typ srflx')) {
           // IP thật (public) từ STUN
-          candidates.add(ip + ' (parse candidate)');
+          candidates.add(ip);
           console.log('Found public IP (STUN - parse):', ip);
           updateResultDisplay();
         } else if (candidate.includes('typ host')) {
