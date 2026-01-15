@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Phát hiện IP WebRTC</title>
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+    }
+    #result {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background-color: #f9f9f9;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: coral;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #2a0d5f;
+    }
+  </style>
+</head>
+<body>
+  <button id="detect">Thực hiện WebRTC</button>
+  <div id="result"></div>
+  <script>
+    document.getElementById('detect').addEventListener('click', async () => {
+  const resultDiv = document.getElementById('result');
+  resultDiv.innerHTML = 'Đang phát hiện IP...';
+
+  try {
+    console.log('Creating RTCPeerConnection...');
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        // STUN servers để phát hiện IP thật
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun.gradient.network:3478' },
+        // Free TURN servers => https://www.expressturn.com/#dashboard
+        // { 
+        //     urls: 'turn:relay1.expressturn.com:3478',
+        //     username: 'efFVAPKLSBWO809JV2',
+        //     credential: 'cD9STLinbA2oLlDN'
+        // }
+        // {
+        //     url: 'turn:turn.anyfirewall.com:443?transport=tcp',
+        //     credential: 'webrtc',
+        //     username: 'webrtc'
+        // }
+        // { 
+        //   urls: 'turn:numb.viagenie.ca',
+        //   username: 'webrtc@live.com',
+        //   credential: 'muazkh'
+        // },
+        // {
+        //   urls: 'turn:openrelay.metered.ca:80',
+        //   username: 'openrelayproject',
+        //   credential: 'openrelayproject'
+        // },
+        // {
+        //   urls: 'turn:openrelay.metered.ca:443',
+        //   username: 'openrelayproject',
+        //   credential: 'openrelayproject'
+        // },
+        // {
+        //   urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        //   username: 'openrelayproject',
+        //   credential: 'openrelayproject'
+        // }
+      ],
+      iceTransportPolicy: 'all', // Cho phép cả STUN và TURN
+      bundlePolicy: 'balanced',
+      rtcpMuxPolicy: 'require',
+      iceCandidatePoolSize: 0
+    });
+	
+	
+	console.log(pc);
+
+    const candidates = new Set();
+    const localCandidates = new Set();
+    const turnCandidates = new Set();
+    const statsCandidates = new Set();
+    let heartbeatInterval;
+
+    // Hàm lấy IP từ getStats
+    const getStatsAndParseIPs = async () => {
+      try {
+        const stats = await pc.getStats();
+        stats.forEach(report => {
+          if (report.type === 'local-candidate' || report.type === 'remote-candidate') {
+            const ip = report.ip;
+            if (ip) {
+              if (report.type === 'local-candidate') {
+                if (report.candidateType === 'srflx') {
+                  statsCandidates.add(ip);
+                  console.log('Found public IP from stats:', ip);
+                }
+              }
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error getting stats:', error);
+      }
+    };
+
+    console.log('Setting up ICE candidate handler...');
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        console.log('Candidate:', event.candidate);
+        console.log('Candidate parse:', JSON.stringify(event.candidate));
+        let candidate = event.candidate.candidate;
+        
+        // Lấy IP từ candidate
+        let ipMatch = candidate.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
+        if (ipMatch) {
+          const ip = ipMatch[1];
+          if (candidate.includes('typ srflx')) {
+            // IP thật (public) từ STUN
+            candidates.add(ip + ' (not parse)');
+            console.log('Found public IP (STUN - not parse):', ip);
+            updateResultDisplay();
+          } else if (candidate.includes('typ host')) {
+            // IP local
+            localCandidates.add(ip);
+            console.log('Found local IP:', ip);
+            updateResultDisplay();
+          } else if (candidate.includes('typ relay')) {
+            // IP từ TURN server
+            turnCandidates.add(ip);
+            console.log('Found TURN relay IP:', ip);
+            updateResultDisplay();
+          }
+        }
+      } else {
+        console.log('No more candidates');
+        // Khi không còn candidates, lấy stats cuối cùng
+        getStatsAndParseIPs().then(() => {
+          updateResultDisplay();
+          pc.close();
+          clearInterval(heartbeatInterval);
+        });
+      }
+      
+      let a = JSON.stringify(event.candidate);
+      let b = JSON.parse(a);
+      candidate = a;
+      ipMatch = candidate.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
+      if (ipMatch) {
+        const ip = ipMatch[1];
+        if (candidate.includes('typ srflx')) {
+          // IP thật (public) từ STUN
+          candidates.add(ip + ' (parse candidate)');
+          console.log('Found public IP (STUN - parse):', ip);
+          updateResultDisplay();
+        } else if (candidate.includes('typ host')) {
+          // IP local
+          localCandidates.add(ip);
+          console.log('Found local IP:', ip);
+          updateResultDisplay();
+        } else if (candidate.includes('typ relay')) {
+          // IP từ TURN server
+          turnCandidates.add(ip);
+          console.log('Found TURN relay IP:', ip);
+          updateResultDisplay();
+        }
+      }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      console.log('ICE Gathering State:', pc.iceGatheringState);
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log('Connection State:', pc.connectionState);
+    };
+
+    pc.ondatachannel = (event) => {
+      console.log('Data channel received:', event);
+      const receiveChannel = event.channel;
+      receiveChannel.onmessage = (e) => console.log('Received message:', e.data);
+      receiveChannel.onopen = () => console.log('Receive channel opened');
+      receiveChannel.onclose = () => console.log('Receive channel closed');
+    };
+
+    console.log('Creating data channel...');
+    const dataChannel = pc.createDataChannel("dc-".concat(Date.now()), {
+      ordered: true,
+      maxRetransmits: 0
+    });
+
+    console.log('Setting up data channel handlers...');
+    dataChannel.onopen = () => {
+      console.log('Data channel opened, readyState:', dataChannel.readyState);
+      // Gửi heartbeat mỗi 2 giây
+      heartbeatInterval = setInterval(() => {
+        if (dataChannel.readyState === 'open') {
+          try {
+            dataChannel.send('heartbeat');
+            console.log('Heartbeat sent');
+          } catch (error) {
+            console.error('Error sending heartbeat:', error);
+          }
+        } else {
+          console.log('Data channel not open, readyState:', dataChannel.readyState);
+        }
+      }, 2000);
+    };
+
+    dataChannel.onclose = () => {
+      console.log('Data channel closed');
+      clearInterval(heartbeatInterval);
+    };
+
+    dataChannel.onerror = (error) => {
+      console.error('Data channel error:', error);
+    };
+
+    dataChannel.onmessage = (event) => {
+      console.log('Received message:', event.data);
+    };
+
+    console.log('Creating offer...');
+    const offer = await pc.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true
+    });
+    console.log('Created offer:', offer);
+    
+    console.log('Setting local description...');
+    await pc.setLocalDescription(offer);
+    console.log('Local description set:', pc.localDescription);
+
+    // Hàm cập nhật hiển thị kết quả
+    const updateResultDisplay = () => {
+      let resultHTML = '';
+      
+      if (candidates.size > 0 || statsCandidates.size > 0) {
+        resultHTML += `
+          <h3>Check qua STUN:</h3>
+          <ul>
+            ${Array.from(candidates).map(ip => `<li>${ip}</li>`).join('')}
+          </ul>
+          <h3>Check qua WebRTC API:</h3>
+          <ul>
+            ${Array.from(statsCandidates).map(ip => `<li>${ip}</li>`).join('')}
+          </ul>
+        `;
+      }
+      
+      if (turnCandidates.size > 0) {
+        resultHTML += `
+          <h3>Check qua Turn:</h3>
+          <ul>
+            ${Array.from(turnCandidates).map(ip => `<li>${ip}</li>`).join('')}
+          </ul>
+        `;
+      }
+      
+      if (localCandidates.size > 0) {
+        resultHTML += `
+          <h3>IP local:</h3>
+          <ul>
+            ${Array.from(localCandidates).map(ip => `<li>${ip}</li>`).join('')}
+          </ul>
+        `;
+      }
+      
+      if (candidates.size === 0 && localCandidates.size === 0 && turnCandidates.size === 0) {
+        resultHTML = 'Đang tìm kiếm IP...';
+      }
+      
+      resultDiv.innerHTML = resultHTML;
+    };
+
+  } catch (error) {
+    console.error('Error:', error);
+    resultDiv.innerHTML = `Lỗi: ${error.message}`;
+  }
+}); 
+  </script>
+</body>
+</html> 
