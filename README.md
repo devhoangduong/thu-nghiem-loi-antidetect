@@ -2,7 +2,7 @@
 
 ### Lộ IP qua WebRTC API
 - Thời gian thử nghiệm: 04/06/2025
-- Antidetect bị ảnh hưởng: **Genlogin, AdsPower**
+- Antidetect bị ảnh hưởng: **AdsPower** (Chế độ WebRTC Forward), **Genlogin** (Chế độ WebRTC Forward Google)
 - **Link check**: [https://devhoangduong.github.io/thu-nghiem-loi-antidetect/webrtc-api.html](https://devhoangduong.github.io/thu-nghiem-loi-antidetect/webrtc-api.html)
 
 ### Kiểm tra bản quyền DRM, Widevine EME
