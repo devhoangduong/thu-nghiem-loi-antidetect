@@ -181,6 +181,7 @@
       pushStep('License request generated');
 
     } catch (err){
+	  state.isAntidetect = true;
       if (state.hasWidevine === null) state.hasWidevine = false;
       state.error = String(err);
       render();
