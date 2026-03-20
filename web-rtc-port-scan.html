@@ -8,6 +8,21 @@
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;700;800&display=swap');
 
   :root {
+    --bg: #f4f4f8;
+    --surface: #ffffff;
+    --surface2: #eeeef4;
+    --border: #d8d8e8;
+    --border2: #c0c0d8;
+    --text: #1a1a2e;
+    --muted: #7878a0;
+    --accent: #5b4de0;
+    --accent2: #7c6aff;
+    --green: #0d9e72;
+    --red: #e0254a;
+    --yellow: #d97706;
+    --scan-line: rgba(91,77,224,0.04);
+  }
+  :root.dark {
     --bg: #0a0a0f;
     --surface: #111118;
     --surface2: #1a1a24;
@@ -61,9 +76,39 @@
   }
   .header-top {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 14px;
     margin-bottom: 6px;
+  }
+  .header-top .spacer { flex: 1; }
+
+  /* Theme toggle */
+  .theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px;
+  }
+  .theme-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding: 4px 9px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .theme-btn:hover { color: var(--text); }
+  .theme-btn.active {
+    background: var(--surface);
+    color: var(--accent2);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
   .title {
     font-family: 'Syne', sans-serif;
@@ -347,6 +392,11 @@
     <div class="header-top">
       <div class="title">WebRTC <span>Port Scanner</span></div>
       <div class="badge">v7</div>
+      <div class="spacer"></div>
+      <div class="theme-toggle">
+        <button class="theme-btn active" id="theme-light" onclick="setTheme('light')">☀ Light</button>
+        <button class="theme-btn" id="theme-dark" onclick="setTheme('dark')">☾ Dark</button>
+      </div>
     </div>
     <div class="subtitle">
       Phát hiện port mở trên localhost qua WebRTC ICE candidate injection.<br>
@@ -360,7 +410,7 @@
       <input class="port-input" id="port-input"
         type="text"
         placeholder="3389, 22, 5900, 8080, 3306"
-        value="3389, 22, 5900, 3306, 5432, 6379, 8080">
+        value="3389,22,5900,5938,3306,5432,1433,6379,27017,80,443,8080">
       <button class="btn-scan" id="btn-scan" onclick="startScan()">▶ SCAN</button>
       <button class="btn-stop" id="btn-stop" onclick="stopScan()">■ STOP</button>
     </div>
@@ -402,6 +452,16 @@
 </div>
 
 <script>
+function setTheme(t) {
+  if (t === 'dark') {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+  document.getElementById('theme-light').classList.toggle('active', t === 'light');
+  document.getElementById('theme-dark').classList.toggle('active', t === 'dark');
+}
+
 // --- Known service names ---
 const SERVICES = {
   21:'FTP', 22:'SSH', 23:'Telnet', 25:'SMTP', 53:'DNS',
