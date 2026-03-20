@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebRTC Port Scanner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --border2: #3a3a50;
+    --text: #e8e8f0;
+    --muted: #6a6a88;
+    --accent: #7c6aff;
+    --accent2: #a78bfa;
+    --green: #22d3a0;
+    --red: #ff4d6a;
+    --yellow: #fbbf24;
+    --scan-line: rgba(124,106,255,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    padding: 40px 24px;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      var(--scan-line) 2px,
+      var(--scan-line) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .container {
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  .header {
+    margin-bottom: 40px;
+  }
+  .header-top {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 6px;
+  }
+  .title {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+  .title span { color: var(--accent2); }
+  .badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border: 1px solid var(--accent);
+    color: var(--accent2);
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .subtitle {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* Input section */
+  .input-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .input-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+    display: block;
+  }
+  .input-row {
+    display: flex;
+    gap: 10px;
+  }
+  .port-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .port-input:focus { border-color: var(--accent); }
+  .port-input::placeholder { color: var(--muted); }
+
+  .presets {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .preset-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .preset-btn:hover { border-color: var(--accent); color: var(--accent2); }
+
+  /* Buttons */
+  .btn-scan {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 10px 22px;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn-scan:hover { background: var(--accent2); transform: translateY(-1px); }
+  .btn-scan:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-stop {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 22px;
+    background: transparent;
+    border: 1px solid var(--red);
+    border-radius: 6px;
+    color: var(--red);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: none;
+  }
+  .btn-stop:hover { background: rgba(255,77,106,0.1); }
+  .btn-stop.visible { display: block; }
+
+  /* Progress bar */
+  .progress-wrap {
+    margin-bottom: 16px;
+    display: none;
+  }
+  .progress-wrap.visible { display: block; }
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .progress-bar-bg {
+    height: 3px;
+    background: var(--surface2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    transition: width 0.3s;
+    width: 0%;
+  }
+
+  /* Results grid */
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .results-title {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .results-summary {
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .results-summary .open-count { color: var(--green); }
+  .results-summary .closed-count { color: var(--muted); }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .port-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: border-color 0.2s;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform: translateY(0); } }
+
+  .port-card.open   { border-color: rgba(34,211,160,0.4); background: rgba(34,211,160,0.04); }
+  .port-card.closed { border-color: var(--border); }
+  .port-card.scanning { border-color: rgba(124,106,255,0.3); }
+  .port-card.scanning .status-dot { animation: pulse 0.8s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .port-card.open    .status-dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .port-card.closed  .status-dot { background: var(--muted); }
+  .port-card.scanning .status-dot { background: var(--accent); }
+  .port-card.pending  .status-dot { background: var(--border2); }
+
+  .port-info { flex: 1; min-width: 0; }
+  .port-number {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 3px;
+  }
+  .port-card.open .port-number { color: var(--green); }
+  .port-service {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .port-status {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .port-card.open    .port-status { color: var(--green); }
+  .port-card.closed  .port-status { color: var(--muted); }
+  .port-card.scanning .port-status { color: var(--accent2); }
+  .port-card.pending  .port-status { color: var(--border2); }
+
+  /* Log */
+  .log-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .log-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .log-clear {
+    font-size: 10px;
+    color: var(--muted);
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: inherit;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: color 0.15s;
+  }
+  .log-clear:hover { color: var(--text); }
+  .log-body {
+    padding: 12px 16px;
+    height: 160px;
+    overflow-y: auto;
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .log-body::-webkit-scrollbar { width: 4px; }
+  .log-body::-webkit-scrollbar-track { background: transparent; }
+  .log-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .log-line { color: var(--muted); }
+  .log-line.info  { color: var(--accent2); }
+  .log-line.open  { color: var(--green); }
+  .log-line.closed{ color: var(--muted); }
+  .log-line.err   { color: var(--red); }
+  .log-line .dim  { opacity: 0.5; }
+
+  /* Footer */
+  .footer {
+    margin-top: 24px;
+    font-size: 10px;
+    color: var(--border2);
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="header-top">
+      <div class="title">WebRTC <span>Port Scanner</span></div>
+      <div class="badge">v7</div>
+    </div>
+    <div class="subtitle">
+      Phát hiện port mở trên localhost qua WebRTC ICE candidate injection.<br>
+      Port mở → TCP handshake → ice=checking tồn tại ≥3 polls &nbsp;|&nbsp; Port đóng → TCP RST → ice=failed/disconnected sớm.
+    </div>
+  </div>
+
+  <div class="input-section">
+    <span class="input-label">Danh sách port (ngăn cách bởi dấu ,)</span>
+    <div class="input-row">
+      <input class="port-input" id="port-input"
+        type="text"
+        placeholder="3389, 22, 5900, 8080, 3306"
+        value="3389, 22, 5900, 3306, 5432, 6379, 8080">
+      <button class="btn-scan" id="btn-scan" onclick="startScan()">▶ SCAN</button>
+      <button class="btn-stop" id="btn-stop" onclick="stopScan()">■ STOP</button>
+    </div>
+    <div class="presets">
+      <span style="font-size:10px;color:var(--muted);align-self:center;">Preset:</span>
+      <button class="preset-btn" onclick="setPreset('3389,5900,5938')">Remote Desktop</button>
+      <button class="preset-btn" onclick="setPreset('22,23,21,3389')">Admin</button>
+      <button class="preset-btn" onclick="setPreset('3306,5432,1433,6379,27017')">Database</button>
+      <button class="preset-btn" onclick="setPreset('80,443,8080,8443,3000,8000')">Web</button>
+      <button class="preset-btn" onclick="setPreset('3389,22,5900,5938,3306,5432,1433,6379,27017,80,443,8080')">All common</button>
+    </div>
+  </div>
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-header">
+      <span id="progress-label">Scanning...</span>
+      <span id="progress-pct">0%</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <div class="results-header">
+    <span class="results-title">Results</span>
+    <span class="results-summary" id="results-summary"></span>
+  </div>
+  <div class="results-grid" id="results-grid"></div>
+
+  <div class="log-section">
+    <div class="log-header">
+      <span>Event log</span>
+      <button class="log-clear" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="log-body" id="log-body"></div>
+  </div>
+
+  <div class="footer">WebRTC ICE TCP probe · localhost only · no network requests</div>
+</div>
+
+<script>
+// --- Known service names ---
+const SERVICES = {
+  21:'FTP', 22:'SSH', 23:'Telnet', 25:'SMTP', 53:'DNS',
+  80:'HTTP', 110:'POP3', 135:'RPC', 139:'NetBIOS', 143:'IMAP',
+  443:'HTTPS', 445:'SMB', 1433:'MSSQL', 1521:'Oracle',
+  2375:'Docker', 3000:'Dev server', 3306:'MySQL', 3389:'RDP',
+  3690:'SVN', 4444:'Metasploit', 5432:'PostgreSQL', 5900:'VNC',
+  5938:'TeamViewer', 6379:'Redis', 6881:'BitTorrent',
+  8080:'HTTP-alt', 8443:'HTTPS-alt', 8888:'Jupyter',
+  27017:'MongoDB', 50070:'Hadoop',
+};
+
+const POLL_MS      = 1000;
+const NEED_COUNT   = 3;
+const MAX_POLLS    = 10;
+const TERMINAL     = new Set(['failed', 'disconnected', 'closed']);
+
+let scanning = false;
+let stopFlag = false;
+let results  = {};
+
+function setPreset(v) {
+  document.getElementById('port-input').value = v;
+}
+
+function log(msg, cls='') {
+  const d = document.getElementById('log-body');
+  const el = document.createElement('div');
+  el.className = 'log-line'+(cls?' '+cls:'');
+  const t = new Date().toISOString().substr(11,12);
+  el.innerHTML = `<span class="dim">[${t}]</span> ${msg}`;
+  d.appendChild(el);
+  d.scrollTop = d.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('log-body').innerHTML = '';
+}
+
+function parsePorts(str) {
+  return [...new Set(
+    str.split(',')
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => !isNaN(n) && n > 0 && n < 65536)
+  )];
+}
+
+function randStr(n, c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789') {
+  let s=''; for (let i=0;i<n;i++) s+=c[Math.floor(Math.random()*c.length)]; return s;
+}
+
+function updateCard(port, state, statusText) {
+  const card = document.getElementById('card-'+port);
+  if (!card) return;
+  card.className = 'port-card '+state;
+  card.querySelector('.port-status').textContent = statusText;
+}
+
+function updateProgress(done, total) {
+  const pct = Math.round(done/total*100);
+  document.getElementById('progress-fill').style.width = pct+'%';
+  document.getElementById('progress-pct').textContent = pct+'%';
+  document.getElementById('progress-label').textContent = `Scanning ${done}/${total} ports`;
+}
+
+function updateSummary() {
+  const open   = Object.values(results).filter(r=>r==='open').length;
+  const closed = Object.values(results).filter(r=>r==='closed').length;
+  document.getElementById('results-summary').innerHTML =
+    `<span class="open-count">${open} open</span> · <span class="closed-count">${closed} closed</span>`;
+}
+
+async function probePort(port) {
+  return new Promise((resolve) => {
+    let pc = null;
+    let statsTimer = null;
+    let checkingCount = 0, pollCount = 0, done = false;
+
+    function finish(isOpen, reason) {
+      if (done) return;
+      done = true;
+      clearInterval(statsTimer);
+      try{pc.close();}catch(e){}
+      pc = null;
+      resolve(isOpen);
+      const cls = isOpen ? 'open' : 'closed';
+      const label = isOpen ? 'OPEN' : 'CLOSED';
+      updateCard(port, cls, label);
+      results[port] = cls;
+      log(`port ${port} (${SERVICES[port]||'?'}) → <b>${label}</b> — ${reason}`, cls);
+      updateSummary();
+    }
+
+    (async () => {
+      try {
+        pc = new RTCPeerConnection({ iceServers: [], iceTransportPolicy: 'all' });
+        pc.oniceconnectionstatechange = () => {};
+
+        const tempPC = new RTCPeerConnection({ iceServers: [] });
+        tempPC.createDataChannel('x');
+        const offer = await tempPC.createOffer();
+        tempPC.close();
+
+        const remoteUfrag = randStr(8);
+        const remotePwd   = randStr(24, 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/');
+        let sdp = offer.sdp;
+        sdp = sdp.replace(/a=ice-ufrag:[^\r\n]+/g, 'a=ice-ufrag:'+remoteUfrag);
+        sdp = sdp.replace(/a=ice-pwd:[^\r\n]+/g,   'a=ice-pwd:'+remotePwd);
+        const midM = sdp.match(/a=mid:([^\r\n]+)/);
+        const mid = midM ? midM[1] : '0';
+
+        await pc.setRemoteDescription({ type: 'offer', sdp });
+
+        const cand = `candidate:1611796298 1 tcp 2113937151 127.0.0.1 ${port} typ host tcptype passive generation 0 ufrag ${remoteUfrag} network-cost 1`;
+        await pc.addIceCandidate({ sdpMid: mid, sdpMLineIndex: 0, candidate: cand });
+
+        const answer = await pc.createAnswer({ voiceActivityDetection: true });
+        await pc.setLocalDescription(answer);
+
+        statsTimer = setInterval(async () => {
+          if (done || stopFlag) { finish(false, 'stopped'); return; }
+          pollCount++;
+          const iceState = pc ? pc.iceConnectionState : 'closed';
+
+          if (iceState === 'checking') {
+            checkingCount++;
+            log(`port ${port} — checking ${checkingCount}/3`);
+            if (checkingCount >= NEED_COUNT) {
+              finish(true, `checking count = ${NEED_COUNT}`);
+            }
+          } else if (TERMINAL.has(iceState)) {
+            finish(false, `ice=${iceState} sau ${checkingCount} lần checking`);
+          } else if (pollCount >= MAX_POLLS) {
+            finish(false, 'timeout');
+          }
+        }, POLL_MS);
+
+      } catch(e) {
+        finish(false, 'error: '+e.message);
+      }
+    })();
+  });
+}
+
+async function startScan() {
+  if (scanning) return;
+  const ports = parsePorts(document.getElementById('port-input').value);
+  if (!ports.length) { alert('Nhập ít nhất 1 port hợp lệ.'); return; }
+
+  scanning = true;
+  stopFlag = false;
+  results  = {};
+
+  document.getElementById('btn-scan').disabled = true;
+  document.getElementById('btn-stop').classList.add('visible');
+  document.getElementById('progress-wrap').classList.add('visible');
+  document.getElementById('results-summary').innerHTML = '';
+
+  // Render cards
+  const grid = document.getElementById('results-grid');
+  grid.innerHTML = '';
+  for (const port of ports) {
+    const card = document.createElement('div');
+    card.className = 'port-card pending';
+    card.id = 'card-'+port;
+    card.innerHTML = `
+      <div class="status-dot"></div>
+      <div class="port-info">
+        <div class="port-number">${port}</div>
+        <div class="port-service">${SERVICES[port] || 'unknown'}</div>
+      </div>
+      <div class="port-status">PENDING</div>
+    `;
+    grid.appendChild(card);
+  }
+
+  clearLog();
+  log(`Bắt đầu scan ${ports.length} port: ${ports.join(', ')}`, 'info');
+  updateProgress(0, ports.length);
+
+  // Scan tuần tự (parallel có thể làm lẫn lộn ICE state)
+  let done = 0;
+  for (const port of ports) {
+    if (stopFlag) break;
+    updateCard(port, 'scanning', 'SCANNING');
+    log(`→ Probing port ${port} (${SERVICES[port]||'?'})...`, 'info');
+    await probePort(port);
+    done++;
+    updateProgress(done, ports.length);
+  }
+
+  scanning = false;
+  stopFlag = false;
+  document.getElementById('btn-scan').disabled = false;
+  document.getElementById('btn-stop').classList.remove('visible');
+
+  const open = Object.values(results).filter(r=>r==='open').length;
+  log(`─── Scan hoàn tất: ${open}/${ports.length} port mở ───`, open>0?'open':'closed');
+}
+
+function stopScan() {
+  stopFlag = true;
+  log('Đã yêu cầu dừng...', 'err');
+}
+</script>
+</body>
+</html>
