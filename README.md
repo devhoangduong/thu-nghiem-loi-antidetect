@@ -14,4 +14,4 @@
 ### Check port đang mở qua webRTC
 - Thời gian thử nghiệm: 20/3/2025
 - Antidetect bị ảnh hưởng: Hầu hết các antidetect
-- Link check: [[https://devhoangduong.github.io/thu-nghiem-loi-antidetect/check-widevine.html](https://devhoangduong.github.io/thu-nghiem-loi-antidetect/web-rtc-port-scan.html)]([https://devhoangduong.github.io/thu-nghiem-loi-antidetect/check-widevine.html](https://devhoangduong.github.io/thu-nghiem-loi-antidetect/web-rtc-port-scan.html))
+- Link check: [https://devhoangduong.github.io/thu-nghiem-loi-antidetect/web-rtc-port-scan.html](https://devhoangduong.github.io/thu-nghiem-loi-antidetect/web-rtc-port-scan.html)
